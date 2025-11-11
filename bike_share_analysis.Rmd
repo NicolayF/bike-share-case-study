@@ -1,0 +1,139 @@
+---
+title: "Cyclistic Bike Share Analysis"
+author: "Franco Nicolay"
+date: "2025-10-25"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    theme: flatly
+    highlight: tango
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  out.width = "90%"
+)
+```
+
+# **Case Study: Cyclistic Bike Share**
+
+## **Phase 1: Ask**
+
+### **1.1 Business Task**
+To analyze Cyclistic's historical trip data to identify how annual members and casual riders use the bike-share service differently. The insights from this analysis will be used to develop a targeted marketing strategy aimed at converting casual riders into annual members.
+
+### **1.2 Key Stakeholders**
+- **Lily Moreno** (Director of Marketing)
+- **Cyclistic Marketing Analytics Team**
+- **Cyclistic Executive Team (final decision-makers)**
+
+```{r load-libraries, include=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+## **Phase 2: Prepare**
+
+### **2.1 Data Sources**
+- **Dataset**: Divvy trip data (Cyclistic is fictional name for Divvy)
+- **Main file**: `202510-divvy-tripdata.csv`
+- **Period**: October 2025
+- **License**: Motivate International Inc. under public license
+
+### **2.2 Dataset Characteristics**
+```{r load_data, echo=FALSE}
+# Load the dataset
+raw_data <- read_csv("data/202510-divvy-tripdata.csv")
+```
+```{r data-overview, echo=FALSE}
+cat("Dataset Structure:\n")
+cat("- Rows:", nrow(raw_data), "rides\n")
+cat("- Columns:", ncol(raw_data), "variables\n")
+cat("- Time period: October 1-31, 2025\n")
+cat("- File format: CSV with 13 columns\n")
+cat("- Primary groups: member_casual (member:", sum(raw_data$member_casual == "member"), 
+    ", casual:", sum(raw_data$member_casual == "casual"), ")\n")
+```
+```{r filtering, echo=FALSE}
+cat("\nData Quality Check:\n")
+cat("- Rides with negative duration:", sum(raw_data$ended_at < raw_data$started_at, na.rm = TRUE), "\n")
+cat("- Rides with 0 minute duration:", sum(raw_data$ended_at == raw_data$started_at, na.rm = TRUE), "\n")
+```
+The dataset contains 646,039 individual bike trips with 13 variables including ride identifiers, timestamps, station information, geographic coordinates, and rider type (65% members, 35% casual riders). Data covers the full month with no timing errors or negative durations.
+
+### **2.3 Data Quality Assessment (ROCCC)**
+- **Reliable**: ✓ First-party data from actual bike-share system
+- **Original**: ✓ Raw trip-level data, not aggregated
+- **Comprehensive**: ✓ 646,039 rides, good representation
+- **Current**: ✓ October 2025
+- **Cited**: ✓ Properly licensed from Motivate International Inc.
+
+## **Phase 3: Process**
+
+### **3.1 Data Cleaning and Transformation**
+```{r}
+# Create the required columns as specified in the case study
+processed_data <- raw_data %>%
+  mutate(
+    #Create ride_length column (in minutes for easier analysis)
+    ride_length = as.numeric(difftime(ended_at, started_at, units = "mins")),
+    
+    #Create day_of_week column (1 = Sunday, 7 = Saturday)
+    day_of_week = wday(started_at, week_start = 7),  # week_start = 7 means Sunday = 1
+    
+    # Additional columns for analysis
+    date = as.Date(started_at),
+    month = month(started_at, label = TRUE),
+    hour = hour(started_at)
+  )
+```
+### **3.2 Data Integrity Validation**
+```{r}
+# Remove extreme outliers for more realistic analysis
+cleaned_data <- processed_data %>%
+  filter(
+    ride_length > 1,          # Remove rides under 1 minute (likely false starts)
+    ride_length < 180,        # Remove rides over 3 hours (likely errors/abandoned bikes)
+    !is.na(start_lat),        # Remove rides with missing coordinates
+    !is.na(end_lat)
+  )
+
+# Verification outputs
+cat("=== DATA CLEANING RESULTS ===\n")
+cat("Original rides:", nrow(processed_data), "\n")
+cat("Cleaned rides:", nrow(cleaned_data), "(", round(nrow(cleaned_data)/nrow(processed_data)*100, 1), "% retained)\n")
+cat("Member/Casual distribution preserved:\n")
+print(table(cleaned_data$member_casual))
+```
+
+## **Phase 4: Analyze**
+
+### **4.1 DESCRIPTIVE ANALYSIS - Basic calculations**
+```{r}
+
+# Mean ride length by user type
+ride_length_summary <- cleaned_data %>%
+  group_by(member_casual) %>%
+  summarise(
+    mean_ride_length = mean(ride_length, na.rm = TRUE),
+    median_ride_length = median(ride_length, na.rm = TRUE),
+    max_ride_length = max(ride_length, na.rm = TRUE),
+    total_rides = n()
+  )
+print(ride_length_summary)
+```
+```{r}
+# Mode of day_of_week by user type
+day_mode <- cleaned_data %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(rides = n()) %>%
+  slice_max(rides, n = 1) %>%
+  arrange(member_casual)
+cat("\nMost popular day by user type:\n")
+print(day_mode)
+```
