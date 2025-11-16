@@ -35,6 +35,10 @@ To analyze Cyclistic's historical trip data to identify how annual members and c
 ```{r load-libraries, include=FALSE}
 library(tidyverse)
 library(lubridate)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(scales)
 ```
 
 ## **Phase 2: Prepare**
@@ -60,7 +64,7 @@ cat("- Primary groups: member_casual (member:", sum(raw_data$member_casual == "m
     ", casual:", sum(raw_data$member_casual == "casual"), ")\n")
 ```
 ```{r filtering, echo=FALSE}
-cat("\nData Quality Check:\n")
+cat("Data Quality Check:\n")
 cat("- Rides with negative duration:", sum(raw_data$ended_at < raw_data$started_at, na.rm = TRUE), "\n")
 cat("- Rides with 0 minute duration:", sum(raw_data$ended_at == raw_data$started_at, na.rm = TRUE), "\n")
 ```
@@ -76,7 +80,7 @@ The dataset contains 646,039 individual bike trips with 13 variables including r
 ## **Phase 3: Process**
 
 ### **3.1 Data Cleaning and Transformation**
-```{r}
+```{r, echo=FALSE}
 # Create the required columns as specified in the case study
 processed_data <- raw_data %>%
   mutate(
@@ -93,7 +97,7 @@ processed_data <- raw_data %>%
   )
 ```
 ### **3.2 Data Integrity Validation**
-```{r}
+```{r, echo=FALSE}
 # Remove extreme outliers for more realistic analysis
 cleaned_data <- processed_data %>%
   filter(
@@ -105,35 +109,245 @@ cleaned_data <- processed_data %>%
 
 # Verification outputs
 cat("=== DATA CLEANING RESULTS ===\n")
+
+cleaning_summary <- data.frame(
+  Metric = c("Original rides", "Cleaned rides", "Retention rate"),
+  Value = c(
+    format(nrow(processed_data), big.mark = ","),
+    format(nrow(cleaned_data), big.mark = ","),
+    paste0(round(nrow(cleaned_data)/nrow(processed_data)*100, 1), "%")
+  )
+)
+
+kable(cleaning_summary, caption = "Data Cleaning Summary") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+
 cat("Original rides:", nrow(processed_data), "\n")
 cat("Cleaned rides:", nrow(cleaned_data), "(", round(nrow(cleaned_data)/nrow(processed_data)*100, 1), "% retained)\n")
-cat("Member/Casual distribution preserved:\n")
-print(table(cleaned_data$member_casual))
+
+distribution <- cleaned_data %>%
+  count(member_casual) %>%
+  rename(`User Type` = member_casual, `Number of Rides` = n) %>%
+  mutate(Percentage = paste0(round(`Number of Rides`/sum(`Number of Rides`)*100, 1), "%"))
+
+kable(distribution, caption = "User Type Distribution After Cleaning") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
 ```
 
 ## **Phase 4: Analyze**
 
 ### **4.1 DESCRIPTIVE ANALYSIS - Basic calculations**
-```{r}
-
+```{r, echo=FALSE}
 # Mean ride length by user type
 ride_length_summary <- cleaned_data %>%
   group_by(member_casual) %>%
   summarise(
-    mean_ride_length = mean(ride_length, na.rm = TRUE),
-    median_ride_length = median(ride_length, na.rm = TRUE),
-    max_ride_length = max(ride_length, na.rm = TRUE),
-    total_rides = n()
-  )
-print(ride_length_summary)
+    `Average Duration (min)` = round(mean(ride_length), 1),
+    `Median Duration (min)` = round(median(ride_length), 1),
+    `Max Duration (min)` = round(max(ride_length), 1),
+    `Total Rides` = n()
+  ) %>%
+  rename(`User Type` = member_casual)
+
+kable(ride_length_summary, caption = "Ride Length by User Type") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
 ```
-```{r}
-# Mode of day_of_week by user type
+```{r, echo=FALSE}
+# Most popular day by user type
 day_mode <- cleaned_data %>%
   group_by(member_casual, day_of_week) %>%
   summarise(rides = n()) %>%
   slice_max(rides, n = 1) %>%
-  arrange(member_casual)
-cat("\nMost popular day by user type:\n")
-print(day_mode)
+  arrange(member_casual) %>%
+  mutate(
+    day_name = case_when(
+      day_of_week == 1 ~ "Sunday",
+      day_of_week == 2 ~ "Monday",
+      day_of_week == 3 ~ "Tuesday",
+      day_of_week == 4 ~ "Wednesday",
+      day_of_week == 5 ~ "Thursday", 
+      day_of_week == 6 ~ "Friday",
+      day_of_week == 7 ~ "Saturday"
+    )
+  ) %>%
+  rename(`User Type` = member_casual, `Peak Day` = day_name, `Rides` = rides) %>%
+  select(`User Type`, `Peak Day`, `Rides`)
+
+kable(day_mode, caption = "Most Popular Day by User Type") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+```
+### **4.2 PIVOT TABLE EQUIVALENTS - Key comparisons**
+```{r, echo=FALSE}
+# PIVOT TABLE 1: Average ride_length for members vs casual
+pivot1 <- cleaned_data %>%
+  group_by(member_casual) %>%
+  summarise(`Average Ride Length (min)` = round(mean(ride_length), 1)) %>%
+  rename(`User Type` = member_casual)
+
+kable(pivot1, caption = "Average Ride Length by User Type") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+
+# PIVOT TABLE 2: Average ride_length by day_of_week and user type  
+pivot2 <- cleaned_data %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(`Average Ride Length (min)` = round(mean(ride_length), 1)) %>%
+  mutate(
+    `Day of Week` = case_when(
+      day_of_week == 1 ~ "Sunday",
+      day_of_week == 2 ~ "Monday",
+      day_of_week == 3 ~ "Tuesday",
+      day_of_week == 4 ~ "Wednesday",
+      day_of_week == 5 ~ "Thursday",
+      day_of_week == 6 ~ "Friday",
+      day_of_week == 7 ~ "Saturday"
+    )
+  ) %>%
+  rename(`User Type` = member_casual) %>%
+  select(`User Type`, `Day of Week`, `Average Ride Length (min)`)
+
+kable(pivot2, caption = "Average Ride Length by Day and User Type") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+
+# PIVOT TABLE 3: Number of rides by day_of_week and user type
+pivot3 <- cleaned_data %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(`Number of Rides` = n()) %>%
+  mutate(
+    `Day of Week` = case_when(
+      day_of_week == 1 ~ "Sunday",
+      day_of_week == 2 ~ "Monday",
+      day_of_week == 3 ~ "Tuesday",
+      day_of_week == 4 ~ "Wednesday",
+      day_of_week == 5 ~ "Thursday",
+      day_of_week == 6 ~ "Friday",
+      day_of_week == 7 ~ "Saturday"
+    )
+  ) %>%
+  rename(`User Type` = member_casual) %>%
+  select(`User Type`, `Day of Week`, `Number of Rides`)
+
+kable(pivot3, caption = "Number of Rides by Day and User Type") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+```
+
+## **Phase 5: Share**
+
+### **5.1 Prepare data for visualizations**
+```{r, echo=FALSE}
+summary_data <- cleaned_data %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(
+    avg_ride_length = mean(ride_length),
+    total_rides = n(),
+    .groups = 'drop'
+  ) %>%
+  mutate(
+    day_name = case_when(
+      day_of_week == 1 ~ "Sunday",
+      day_of_week == 2 ~ "Monday", 
+      day_of_week == 3 ~ "Tuesday",
+      day_of_week == 4 ~ "Wednesday",
+      day_of_week == 5 ~ "Thursday",
+      day_of_week == 6 ~ "Friday",
+      day_of_week == 7 ~ "Saturday"
+    ),
+    day_name = factor(day_name, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+  )
+```
+### **5.2 Visualization 1: Average duration per day and user type**
+```{r, echo=FALSE}
+viz1 <- ggplot(summary_data, aes(x = day_name, y = avg_ride_length, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Casual Riders Take Longer Trips, Especially on Weekends",
+    subtitle = "Average ride duration by day of week and user type",
+    x = "Day of Week",
+    y = "Average Ride Length (minutes)",
+    fill = "User Type"
+  ) +
+  scale_fill_manual(values = c("casual" = "#FF6B6B", "member" = "#4ECDC4")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(viz1)
+```
+### **5.3 Visualization 2: Number of trips per day and user type**
+```{r, echo=FALSE}
+viz2 <- ggplot(summary_data, aes(x = day_name, y = total_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Members Ride More on Weekdays, Casual Riders Prefer Weekends",
+    subtitle = "Number of rides by day of week and user type",
+    x = "Day of Week", 
+    y = "Number of Rides",
+    fill = "User Type"
+  ) +
+  scale_fill_manual(values = c("casual" = "#FF6B6B", "member" = "#4ECDC4")) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(viz2)
+```
+### **5.4 Visualization 3: General comparison**
+```{r, echo=FALSE}
+viz3 <- cleaned_data %>%
+  group_by(member_casual) %>%
+  summarise(avg_duration = mean(ride_length)) %>%
+  ggplot(aes(x = member_casual, y = avg_duration, fill = member_casual)) +
+  geom_col() +
+  labs(
+    title = "Casual Riders Take 45% Longer Trips Than Members",
+    subtitle = "Average ride duration comparison",
+    x = "User Type",
+    y = "Average Ride Length (minutes)"
+  ) +
+  scale_fill_manual(values = c("casual" = "#FF6B6B", "member" = "#4ECDC4")) +
+  theme_minimal()
+
+print(viz3)
+```
+
+## **Phase 6: Act**
+
+### **Summary**
+```{r, echo=FALSE, results='asis'}
+key_insights <- list(
+  ride_duration = list(
+    casual = 16.6,
+    member = 11.5,
+    difference = "45% longer"
+  ),
+  peak_days = list(
+    casual = "Saturday", 
+    member = "Thursday"
+  ),
+  user_ratio = list(
+    casual_pct = 34.1,
+    member_pct = 65.9
+  )
+)
+
+# TOP 3 RECOMMENDATIONS
+cat('<h3>Top 3 Recommendations for Cyclistic</h3>')
+cat('<h4>1. WEEKEND-FOCUSED MEMBERSHIP CAMPAIGN</h4>')
+cat('<ul>')
+cat('<li>Target casual riders on Saturdays when they ride most frequently</li>')
+cat('<li>Highlight cost savings for frequent weekend users</li>')
+cat('<li>Launch "Weekend Warrior" membership tier</li>')
+cat('</ul>')
+
+cat('<h4>2. PREMIUM LONG-RIDE EXPERIENCE</h4>')
+cat('<ul>')
+cat('<li>Casual riders take 45% longer rides</li>')
+cat('<li>Offer member benefits for longer rides (premium bikes, extended time)</li>')
+cat('<li>Promote scenic route guides for leisure riders</li>')
+cat('</ul>')
+
+cat('<h4>3. COMMUTER-TO-LEISURE CONVERSION</h4>')
+cat('<ul>')
+cat('<li>Members already use bikes efficiently for commuting</li>')
+cat('<li>Educate members about weekend leisure benefits</li>')
+cat('<li>Create "Dual-Use" marketing showing work + weekend value</li>')
+cat('</ul>')
 ```
