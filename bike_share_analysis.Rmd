@@ -4,6 +4,7 @@ author: "Franco Nicolay"
 date: "2025-10-25"
 output: 
   html_document:
+    output_file: "index.html"
     toc: true
     toc_float: true
     code_folding: show
@@ -55,6 +56,8 @@ caption_blue <- function(text) {
   paste0("<span style='color:#2C3E50; font-weight:bold; font-size:15px;'>", text, "</span>")
 }
 ```
+
+
 
 # **Case Study: Cyclistic Bike Share**
 
@@ -206,8 +209,8 @@ The following steps were applied to prepare the data for analysis:
 ```{r, echo=FALSE}
 raw_data <- raw_data %>%
 mutate(
-started_at = as.POSIXct(started_at, tz = "UTC", format = "%Y-%m-%d %H:%M:%S"),
-ended_at = as.POSIXct(ended_at, tz = "UTC", format = "%Y-%m-%d %H:%M:%S")
+  started_at = as.POSIXct(started_at, tz = "UTC", format = "%Y-%m-%d %H:%M:%S"),
+  ended_at = as.POSIXct(ended_at, tz = "UTC", format = "%Y-%m-%d %H:%M:%S")
 )
 ```
 
@@ -224,12 +227,14 @@ mutate(
   # ride_length in minutes for easier interpretation
   ride_length = as.numeric(difftime(ended_at, started_at, units = "mins")),
   # day_of_week as a factor with readable labels (Sunday = Sun, ... Saturday = Sat)
-  day_of_week = wday(started_at, label = TRUE, abbr = TRUE),
+  day_of_week = wday(started_at, label = TRUE, abbr = TRUE, , locale = "en"),
+  day_of_week_num = wday(started_at),
   # date, month, and hour for aggregations
   date = as.Date(started_at),
   month = month(started_at, label = TRUE, abbr = TRUE),
   hour = hour(started_at)
 )
+
 ```
 
 ---
@@ -268,16 +273,14 @@ Metric = c("Original rides", "Cleaned rides", "Retention rate"),
 Value = c(original_count, cleaned_count, paste0(retention_rate, "%"))
 )
 
-kable(cleaning_summary, caption = caption_blue("**Data Cleaning Summary**"), escape = FALSE) %>%
-kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+format_table(cleaning_summary, caption_blue("Data Cleaning Summary"))
 
 distribution <- cleaned_data %>%
 count(member_casual) %>%
 rename(`User Type` = member_casual, `Number of Rides` = n) %>%
 mutate(Percentage = paste0(round(`Number of Rides` / sum(`Number of Rides`) * 100, 1), "%"))
 
-kable(distribution, caption = caption_blue("**User Type Distribution After Cleaning**"), escape = FALSE) %>%
-kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+format_table(distribution, caption_blue("User Type Distribution After Cleaning"))
 ```
 ```{r missing-station-summary, echo=FALSE}
 # Missing stations
@@ -312,9 +315,7 @@ summarise(
   trips = n()
   )
 
-kable(summary_stats, caption = caption_blue("**Descriptive Statistics by User Type**"), escape = FALSE) %>%
-kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
-
+format_table(summary_stats, caption_blue("Descriptive Statistics by User Type"))
 ```
 
 ---
@@ -376,12 +377,11 @@ summary_table <- cleaned_data %>%
 group_by(member_casual) %>%
 summarise(
   avg_duration = round(mean(ride_length), 1),
-  weekend_share = round(mean(day_of_week %in% c("Sat","Sun")) * 100, 1),
+  weekend_share = round(mean(day_of_week_num %in% c(1,7)) * 100, 1),
   peak_hour = hour[which.max(table(hour))][1]
 )
 
-kable(summary_table, caption = caption_blue("**Key Behavioral Differences Between Rider Types**"), escape = FALSE) %>%
-kable_styling(bootstrap_options = "bordered", full_width = FALSE, position = "left")
+format_table(summary_table, caption_blue("Key Behavioral Differences Between Rider Types"))
 ```
 ---
 
@@ -438,8 +438,9 @@ top_member_stations <- cleaned_data %>%
   arrange(desc(Rides)) %>%
   head(5)
 
-format_table(top_casual_stations, "Top 5 Start Stations: Casual Riders")
-format_table(top_member_stations, "Top 5 Start Stations: Members")
+format_table(top_casual_stations, caption_blue("Top 5 Start Stations: Casual Riders"))
+format_table(top_member_stations, caption_blue("Top 5 Start Stations: Members"))
+
 ```
 
 ---
@@ -519,7 +520,7 @@ Based on the behavioral differences identified between casual riders and annual 
 
 3. **Create "Convert-in-the-App" Prompts**  
 * **Data:** Casual riders take trips over twice as long as members (Sec 4.1).
-* **Action:** Program the app to recognize a long-duration casual ride. When they dock their bike, send a push notification: "You rode for 75 minutes\! That casual ride cost $X. An annual pass would have made it free. Learn more." This targets the user at their moment of highest engagement.
+* **Action:** Program the app to recognize a long-duration casual ride. When they dock their bike, send a push notification: "You rode for X minutes\! That casual ride cost $Y. An annual pass would have made it free! Learn more." This targets the user at their moment of highest engagement.
 
 ---
 
