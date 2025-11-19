@@ -48,7 +48,8 @@ Analyze historical bike trip data to identify how casual riders and annual membe
    - Open RStudio
    - Copy and paste this into the console:
    ```r
-   packages <- c("tidyverse", "lubridate", "knitr", "kableExtra", "ggplot2", "scales")install.packages(packages)
+   packages <- c("tidyverse", "lubridate", "knitr", "kableExtra", "ggplot2", "scales")
+   install.packages(packages)
    ```
 
 4. **Load Analysis**
